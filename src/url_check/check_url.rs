@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use futures::future::join_all;
 use reqwest::Error;
 
@@ -18,14 +20,38 @@ pub async fn init() -> Result<(), Error> {
 
     result.iter().for_each(|item| {
         if item.is_alive {
-            println!("available {:?}", item.url);
+            println!("sending no alert but, available {:?}", item.url);
         } else {
-            println!("unavailable {:?}", item.url);
-            urls_unavailable.push(&item.url);
+            println!("sending alert unavailable {:?}", item.url);
+            urls_unavailable.push(item.url.clone());
         }
     });
 
+    check_unavailable_urls(urls_unavailable).await;
+
     Ok(())
+}
+
+async fn check_unavailable_urls(mut urls_unavailable: Vec<String>) {
+    if urls_unavailable.is_empty() {
+        return;
+    }
+
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
+    loop {
+        interval.tick().await;
+        let result = join_all(urls_unavailable.iter().map(|item| is_url_alive(item))).await;
+
+        result.iter().filter(|item| item.is_alive).for_each(|item| {
+            println!("url {} back online", item.url);
+            let alive_item_position = urls_unavailable.iter().position(|x| x == &item.url);
+            urls_unavailable.remove(alive_item_position.unwrap());
+        });
+
+        if urls_unavailable.is_empty() {
+            return;
+        }
+    }
 }
 
 async fn is_url_alive(url: &str) -> UrlCheck {

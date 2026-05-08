@@ -7,7 +7,7 @@ use url_check::check_url;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut interval = tokio::time::interval(Duration::from_secs(10));
+    let mut interval = tokio::time::interval(Duration::from_secs(20));
     loop {
         interval.tick().await;
 
