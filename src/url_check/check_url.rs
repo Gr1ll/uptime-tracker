@@ -1,12 +1,18 @@
-use std::time::Duration;
+use std::{
+    sync::{Mutex, OnceLock},
+    time::Duration,
+};
 
 use futures::future::join_all;
 use reqwest::Error;
+use tokio::task::JoinHandle;
 
 struct UrlCheck {
     url: String,
     is_alive: bool,
 }
+
+static HANDLES: OnceLock<Mutex<Vec<JoinHandle<()>>>> = OnceLock::new();
 
 pub async fn init() -> Result<(), Error> {
     let urls = vec![
@@ -15,6 +21,12 @@ pub async fn init() -> Result<(), Error> {
         is_url_alive("https://goblinfpv.com"),
     ];
     let mut urls_unavailable = Vec::new();
+    let mut handles = get_handles().lock().unwrap();
+
+    for handle in handles.iter() {
+        handle.abort();
+    }
+    handles.clear();
 
     let result = join_all(urls).await;
 
@@ -27,8 +39,8 @@ pub async fn init() -> Result<(), Error> {
         }
     });
 
-    check_unavailable_urls(urls_unavailable).await;
-
+    let handle = tokio::spawn(check_unavailable_urls(urls_unavailable));
+    handles.push(handle);
     Ok(())
 }
 
@@ -42,6 +54,7 @@ async fn check_unavailable_urls(mut urls_unavailable: Vec<String>) {
         interval.tick().await;
         let result = join_all(urls_unavailable.iter().map(|item| is_url_alive(item))).await;
 
+        println!("checking something");
         result.iter().filter(|item| item.is_alive).for_each(|item| {
             println!("url {} back online", item.url);
             let alive_item_position = urls_unavailable.iter().position(|x| x == &item.url);
@@ -67,4 +80,8 @@ async fn is_url_alive(url: &str) -> UrlCheck {
             is_alive: false,
         },
     }
+}
+
+fn get_handles() -> &'static Mutex<Vec<JoinHandle<()>>> {
+    HANDLES.get_or_init(|| Mutex::new(Vec::new()))
 }
