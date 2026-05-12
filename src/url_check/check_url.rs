@@ -54,7 +54,6 @@ async fn check_unavailable_urls(mut urls_unavailable: Vec<String>) {
         interval.tick().await;
         let result = join_all(urls_unavailable.iter().map(|item| is_url_alive(item))).await;
 
-        println!("checking something");
         result.iter().filter(|item| item.is_alive).for_each(|item| {
             println!("url {} back online", item.url);
             let alive_item_position = urls_unavailable.iter().position(|x| x == &item.url);
